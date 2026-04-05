@@ -1,4 +1,4 @@
-import { google, drive_v3 } from "googleapis"
+import { google, drive_v3, docs_v1 } from "googleapis"
 import { prisma } from "./prisma"
 
 export async function getValidAccessToken(userId: string): Promise<string> {
@@ -44,10 +44,18 @@ export async function getValidAccessToken(userId: string): Promise<string> {
   return credentials.access_token!
 }
 
-export function getDriveClient(accessToken: string): drive_v3.Drive {
+function createGoogleAuth(accessToken: string) {
   const auth = new google.auth.OAuth2()
   auth.setCredentials({ access_token: accessToken })
-  return google.drive({ version: "v3", auth })
+  return auth
+}
+
+export function getDriveClient(accessToken: string): drive_v3.Drive {
+  return google.drive({ version: "v3", auth: createGoogleAuth(accessToken) })
+}
+
+export function getDocsClient(accessToken: string): docs_v1.Docs {
+  return google.docs({ version: "v1", auth: createGoogleAuth(accessToken) })
 }
 
 export async function listDriveFiles(
@@ -83,4 +91,59 @@ export async function exportDocAsText(
     { responseType: "arraybuffer" }
   )
   return Buffer.from(res.data as ArrayBuffer).toString("utf-8")
+}
+
+export type DocTab = {
+  tabId: string
+  title: string
+  text: string
+}
+
+function flattenTabs(tabs: docs_v1.Schema$Tab[]): docs_v1.Schema$Tab[] {
+  const result: docs_v1.Schema$Tab[] = []
+  for (const tab of tabs) {
+    result.push(tab)
+    if (tab.childTabs?.length) {
+      result.push(...flattenTabs(tab.childTabs))
+    }
+  }
+  return result
+}
+
+function extractText(elements: docs_v1.Schema$StructuralElement[]): string {
+  let text = ""
+  for (const el of elements) {
+    if (el.paragraph) {
+      for (const elem of el.paragraph.elements ?? []) {
+        text += elem.textRun?.content ?? ""
+      }
+    } else if (el.table) {
+      for (const row of el.table.tableRows ?? []) {
+        for (const cell of row.tableCells ?? []) {
+          text += extractText(cell.content ?? [])
+        }
+      }
+    } else if (el.tableOfContents) {
+      text += extractText(el.tableOfContents.content ?? [])
+    }
+  }
+  return text
+}
+
+export async function extractAllTabsText(
+  accessToken: string,
+  documentId: string
+): Promise<DocTab[]> {
+  const docs = getDocsClient(accessToken)
+
+  const res = await docs.documents.get({
+    documentId,
+    includeTabsContent: true,
+  })
+
+  return flattenTabs(res.data.tabs ?? []).map((tab) => ({
+    tabId: tab.tabProperties?.tabId ?? "unknown",
+    title: tab.tabProperties?.title ?? "Sem título",
+    text: extractText(tab.documentTab?.body?.content ?? []),
+  }))
 }
