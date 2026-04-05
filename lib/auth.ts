@@ -2,6 +2,7 @@ import { betterAuth } from "better-auth"
 import { prismaAdapter } from "better-auth/adapters/prisma"
 import { prisma } from "@/lib/prisma"
 import { nextCookies } from "better-auth/next-js"
+import { GOOGLE_SCOPES } from "@/lib/google-scopes"
 
 export const auth = betterAuth({
   baseURL: {
@@ -17,7 +18,7 @@ export const auth = betterAuth({
       clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
       accessType: "offline",
       prompt: "select_account consent",
-      scopes: ["https://www.googleapis.com/auth/drive.readonly"],
+      scopes: [GOOGLE_SCOPES.DRIVE_READONLY, GOOGLE_SCOPES.DOCS_READONLY],
     },
   },
   plugins: [nextCookies()],
