@@ -1,8 +1,9 @@
 "use client"
 
-import { useCallback } from "react"
 import { authClient } from "@/lib/auth-client"
 import { useIntegrations } from "@/providers/integrations"
+import { GOOGLE_SCOPES } from "@/lib/google-scopes"
+import { GoogleDocIcon, GoogleDriveIcon } from "@hugeicons/core-free-icons"
 import {
   Sidebar,
   SidebarContent,
@@ -18,15 +19,21 @@ import { AccountItem } from "./account-item"
 
 export function AppSidebar() {
   const { data: session } = authClient.useSession()
-  const { driveConnected } = useIntegrations()
+  const { driveConnected, docsConnected } = useIntegrations()
 
-  const requestDriveAccess = useCallback(async () => {
-    await authClient.linkSocial({
+  async function requestGoogleScope(scopes: string[]) {
+    const { data } = await authClient.linkSocial({
       provider: "google",
-      scopes: ["https://www.googleapis.com/auth/drive.readonly"],
+      scopes,
       callbackURL: "/",
+      disableRedirect: true,
     })
-  }, [])
+    if (data?.url) {
+      const url = new URL(data.url)
+      if (session?.user.email) url.searchParams.set("login_hint", session.user.email)
+      window.location.href = url.toString()
+    }
+  }
 
   return (
     <Sidebar collapsible="icon">
@@ -48,8 +55,16 @@ export function AppSidebar() {
       <SidebarFooter>
         <SidebarMenu>
           <IntegrationItem
+            icon={GoogleDriveIcon}
+            label="Google Drive"
             connected={driveConnected}
-            onConnectAction={requestDriveAccess}
+            onConnectAction={() => requestGoogleScope([GOOGLE_SCOPES.DRIVE_READONLY])}
+          />
+          <IntegrationItem
+            icon={GoogleDocIcon}
+            label="Google Docs"
+            connected={docsConnected}
+            onConnectAction={() => requestGoogleScope([GOOGLE_SCOPES.DOCS_READONLY])}
           />
           <AccountItem
             name={session?.user.name}

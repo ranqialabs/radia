@@ -1,20 +1,23 @@
 "use client"
 
-import { HugeiconsIcon } from "@hugeicons/react"
+import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react"
 import {
   AlertCircleIcon,
   CheckmarkCircle01Icon,
-  GoogleDriveIcon,
 } from "@hugeicons/core-free-icons"
 import { cn } from "@/lib/utils"
 import { SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar"
 
 type IntegrationItemProps = {
+  icon: IconSvgElement
+  label: string
   connected: boolean
   onConnectAction: () => void
 }
 
 export function IntegrationItem({
+  icon,
+  label,
   connected,
   onConnectAction,
 }: IntegrationItemProps) {
@@ -25,13 +28,13 @@ export function IntegrationItem({
         className={cn(!connected && "text-muted-foreground")}
         tooltip={{
           children: connected
-            ? "Google Drive connected"
-            : "Click to connect Google Drive",
+            ? `${label} connected`
+            : `Click to connect ${label}`,
           hidden: false,
         }}
       >
-        <HugeiconsIcon icon={GoogleDriveIcon} size={16} />
-        <span className="flex-1">Google Drive</span>
+        <HugeiconsIcon icon={icon} size={16} />
+        <span className="flex-1">{label}</span>
         <HugeiconsIcon
           icon={connected ? CheckmarkCircle01Icon : AlertCircleIcon}
           size={14}
