@@ -7,7 +7,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
-import { AppSidebar } from "@/components/app-sidebar"
+import { AppSidebar } from "@/components/sidebar"
 import { IntegrationsProvider } from "@/providers/integrations"
 
 async function hasDriveScope(userId: string) {
