@@ -21,11 +21,6 @@ export default defineConfig({
   },
   dirs: ["trigger"],
   build: {
-    extensions: [
-      prismaExtension({
-        mode: "legacy",
-        schema: "prisma/schema.prisma",
-      }),
-    ],
+    extensions: [prismaExtension({ mode: "modern" })],
   },
 })
