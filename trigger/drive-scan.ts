@@ -1,14 +1,29 @@
-import { logger, task } from "@trigger.dev/sdk/v3"
+import { logger, metadata, task } from "@trigger.dev/sdk"
 import {
-  exportDocAsText,
+  extractAllTabsText,
   getDriveClient,
   getValidAccessToken,
   listDriveFiles,
+  type DocTab,
 } from "../lib/google-drive"
+import { mem0 } from "../lib/mem0"
+import { prisma } from "../lib/prisma"
+
+function tabToMessage(tab: DocTab) {
+  // Mem0 expects "user" for raw dialog (transcription) and "assistant" for summaries.
+  // This lets Mem0 extract memories with correct conversational context.
+  const isTranscription = ["transcript", "transcrição", "transcricao"].some(
+    (k) => tab.title.toLowerCase().includes(k)
+  )
+  return {
+    role: isTranscription ? ("user" as const) : ("assistant" as const),
+    content: `[${tab.title}]\n\n${tab.text}`,
+  }
+}
 
 export const driveScanTask = task({
   id: "drive-scan",
-  maxDuration: 300,
+  maxDuration: 600,
   run: async (payload: { userId: string; folderId?: string }) => {
     const { userId, folderId } = payload
 
@@ -22,30 +37,65 @@ export const driveScanTask = task({
       files: files.map((f) => ({ id: f.id, name: f.name })),
     })
 
-    const results = await Promise.all(
-      files.map(async (file) => {
-        if (!file.id || !file.name) return null
+    const validFiles = files.filter((f) => f.id && f.name) as (typeof files[number] & {
+      id: string
+      name: string
+    })[]
 
-        const text = await exportDocAsText(drive, file.id)
-        logger.log(`Exported doc: ${file.name}`, { charCount: text.length })
-
-        return {
-          fileId: file.id,
-          name: file.name,
-          modifiedTime: file.modifiedTime,
-          charCount: text.length,
-          preview: text.slice(0, 200),
-        }
-      })
+    // Batch check which files were already processed
+    const alreadyProcessed = new Set(
+      (
+        await prisma.meetingMemory.findMany({
+          where: { userId, fileId: { in: validFiles.map((f) => f.id) } },
+          select: { fileId: true },
+        })
+      ).map((m) => m.fileId)
     )
 
-    const docs = results.filter(Boolean)
+    const toProcess = validFiles.filter((f) => !alreadyProcessed.has(f.id))
+    const skipped = validFiles.length - toProcess.length
 
-    logger.log("Drive scan complete", {
-      totalDocs: docs.length,
-      totalChars: docs.reduce((sum, d) => sum + (d?.charCount ?? 0), 0),
-    })
+    metadata.set("total", validFiles.length)
+    metadata.set("skipped", skipped)
+    metadata.set("processed", 0)
 
-    return { docs }
+    let processed = 0
+
+    for (const file of toProcess) {
+      logger.log(`Extracting tabs from: ${file.name}`)
+      const tabs = await extractAllTabsText(accessToken, file.id)
+
+      logger.log(`Extracted ${tabs.length} tabs`, {
+        tabs: tabs.map((t) => ({ title: t.title, chars: t.text.length })),
+      })
+
+      const messages = tabs.map(tabToMessage)
+
+      const result = await mem0.add(messages, {
+        user_id: userId,
+        metadata: {
+          fileId: file.id,
+          title: file.name,
+          source: "google-drive",
+          modifiedTime: file.modifiedTime ?? null,
+        },
+      })
+
+      const mem0Ids = Array.isArray(result)
+        ? result.map((r: { id: string }) => r.id)
+        : []
+
+      await prisma.meetingMemory.create({
+        data: { fileId: file.id, userId, title: file.name, mem0Ids },
+      })
+
+      processed++
+      metadata.set("processed", processed)
+      logger.log(`Ingested: ${file.name}`, { mem0Ids })
+    }
+
+    logger.log("Drive scan complete", { processed, skipped })
+
+    return { processed, skipped, total: validFiles.length }
   },
 })
