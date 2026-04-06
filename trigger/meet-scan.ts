@@ -6,29 +6,11 @@ import {
   listConferenceRecords,
   listTranscriptsWithDoc,
 } from "../lib/google-meet"
+import { mapWithConcurrency } from "../lib/async"
 import { prisma } from "../lib/prisma"
 import { meetIngestTask } from "./meet-ingest"
 
 const CONCURRENCY = 5
-
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  concurrency: number,
-  fn: (item: T) => Promise<R>
-): Promise<R[]> {
-  const results: R[] = new Array(items.length)
-  let index = 0
-
-  async function worker() {
-    while (index < items.length) {
-      const i = index++
-      results[i] = await fn(items[i])
-    }
-  }
-
-  await Promise.all(Array.from({ length: concurrency }, worker))
-  return results
-}
 
 export const meetScanTask = schemaTask({
   id: "meet-scan",

@@ -1,6 +1,10 @@
 import { logger, schemaTask } from "@trigger.dev/sdk"
 import { z } from "zod"
-import { getValidAccessToken } from "../lib/google-drive"
+import {
+  getValidAccessToken,
+  getDriveClient,
+  getDocTitle,
+} from "../lib/google-drive"
 import { getMeetClient, buildFormattedTranscript } from "../lib/google-meet"
 import { extractMemories } from "../lib/memory-extractor"
 import {
@@ -32,6 +36,7 @@ export const meetIngestTask = schemaTask({
   }) => {
     const accessToken = await getValidAccessToken(userId)
     const meetClient = getMeetClient(accessToken)
+    const driveClient = getDriveClient(accessToken)
 
     // Only look up the Drive memory link if not already linked from a prior run
     const conferenceRow = await prisma.conferenceRecord.findUnique({
@@ -39,13 +44,14 @@ export const meetIngestTask = schemaTask({
       select: { meetingMemoryId: true },
     })
 
-    const [existingMemory, rawTranscript] = await Promise.all([
+    const [existingMemory, rawTranscript, docName] = await Promise.all([
       conferenceRow?.meetingMemoryId
         ? Promise.resolve(null)
         : prisma.meetingMemory.findUnique({
             where: { fileId_userId: { fileId: docsFileId, userId } },
           }),
       buildFormattedTranscript(meetClient, transcriptName),
+      getDocTitle(driveClient, docsFileId),
     ])
 
     if (existingMemory) {
@@ -67,9 +73,12 @@ export const meetIngestTask = schemaTask({
     const lineCount = (rawTranscript.match(/\n/g) ?? []).length + 1
     logger.log(`Raw transcript: ${lineCount} lines`)
 
-    const meetingTitle = startTime
-      ? `Meet ${new Date(startTime).toLocaleDateString("pt-BR")}`
-      : recordName
+    // Strip auto-generated timestamp and "Transcript" suffix from Meet doc names
+    const meetingTitle =
+      docName?.replace(/\s*\(.*?\)\s*-\s*Transcript\s*$/i, "").trim() ||
+      (startTime
+        ? `Meet ${new Date(startTime).toLocaleDateString("pt-BR")}`
+        : recordName)
 
     const extracted = await extractMemories(
       [{ tabId: "meet-raw", title: "Raw Transcript", text: rawTranscript }],

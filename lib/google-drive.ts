@@ -148,6 +148,17 @@ function extractText(elements: docs_v1.Schema$StructuralElement[]): string {
   return text
 }
 
+export async function getDocTitle(
+  driveClient: drive_v3.Drive,
+  fileId: string
+): Promise<string | null> {
+  const res = await driveClient.files.get({
+    fileId,
+    fields: "name",
+  })
+  return res.data.name ?? null
+}
+
 export async function extractAllTabsText(
   accessToken: string,
   documentId: string

@@ -1,6 +1,6 @@
 import { meet_v2 } from "@googleapis/meet"
 import { meet } from "@googleapis/meet"
-import { OAuth2Client } from "google-auth-library"
+import { createGoogleAuth } from "./google-drive"
 
 export type ConferenceRecord = {
   name: string
@@ -24,9 +24,7 @@ export type TranscriptEntry = {
 }
 
 export function getMeetClient(accessToken: string): meet_v2.Meet {
-  const auth = new OAuth2Client()
-  auth.setCredentials({ access_token: accessToken })
-  return meet({ version: "v2", auth })
+  return meet({ version: "v2", auth: createGoogleAuth(accessToken) })
 }
 
 export async function listConferenceRecords(
