@@ -1,4 +1,5 @@
-import { logger, metadata, task } from "@trigger.dev/sdk"
+import { logger, metadata, schemaTask } from "@trigger.dev/sdk"
+import { z } from "zod"
 import {
   extractAllTabsText,
   getDriveClient,
@@ -21,11 +22,20 @@ function tabToMessage(tab: DocTab) {
   }
 }
 
-export const driveScanTask = task({
+export const driveScanTask = schemaTask({
   id: "drive-scan",
+  schema: z.object({ userId: z.string() }),
   maxDuration: 600,
-  run: async (payload: { userId: string; folderId?: string }) => {
-    const { userId, folderId } = payload
+  run: async ({ userId }) => {
+    const monitored = await prisma.monitoredFolder.findUnique({
+      where: { userId },
+      select: { folderId: true },
+    })
+
+    const folderId =
+      monitored && monitored.folderId !== "root"
+        ? monitored.folderId
+        : undefined
 
     logger.log("Starting Drive scan", { userId, folderId })
 
@@ -39,12 +49,8 @@ export const driveScanTask = task({
 
     const validFiles = files.filter(
       (f) => f.id && f.name
-    ) as ((typeof files)[number] & {
-      id: string
-      name: string
-    })[]
+    ) as ((typeof files)[number] & { id: string; name: string })[]
 
-    // Batch check which files were already processed
     const alreadyProcessed = new Set(
       (
         await prisma.meetingMemory.findMany({
