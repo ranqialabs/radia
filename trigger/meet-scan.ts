@@ -8,6 +8,27 @@ import {
 import { prisma } from "../lib/prisma"
 import { meetIngestTask } from "./meet-ingest"
 
+const CONCURRENCY = 5
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = new Array(items.length)
+  let index = 0
+
+  async function worker() {
+    while (index < items.length) {
+      const i = index++
+      results[i] = await fn(items[i])
+    }
+  }
+
+  await Promise.all(Array.from({ length: concurrency }, worker))
+  return results
+}
+
 export const meetScanTask = schemaTask({
   id: "meet-scan",
   schema: z.object({ userId: z.string() }),
@@ -51,15 +72,21 @@ export const meetScanTask = schemaTask({
       }
     }
 
-    // Fetch transcripts for all pending conferences in parallel
-    const transcriptResults = await Promise.all(
-      toProcess.map(async (conference) => ({
-        conference,
-        ready:
-          (await listTranscriptsWithDoc(accessToken, conference.name)).find(
+    // Fetch transcripts with bounded concurrency to avoid heap exhaustion
+    const transcriptResults = await mapWithConcurrency(
+      toProcess,
+      CONCURRENCY,
+      async (conference) => {
+        const transcripts = await listTranscriptsWithDoc(
+          accessToken,
+          conference.name
+        )
+        const ready =
+          transcripts.find(
             (t) => t.state === "FILE_GENERATED" && t.docsFileId !== null
-          ) ?? null,
-      }))
+          ) ?? null
+        return { conference, ready }
+      }
     )
 
     const readyItems = transcriptResults.filter((r) => r.ready !== null) as {
@@ -76,35 +103,35 @@ export const meetScanTask = schemaTask({
       }
     }
 
-    // Register all ready conferences in parallel
-    const conferenceRows = await Promise.all(
-      readyItems.map(({ conference }) =>
-        prisma.conferenceRecord.upsert({
-          where: { recordName: conference.name },
-          create: {
-            userId,
-            recordName: conference.name,
-            spaceId: conference.spaceId,
-            startTime: conference.startTime
-              ? new Date(conference.startTime)
-              : null,
-            endTime: conference.endTime ? new Date(conference.endTime) : null,
-          },
-          update: {},
-        })
-      )
-    )
+    // Upsert conference rows sequentially to keep DB connections low
+    const batch: Parameters<typeof meetIngestTask.batchTrigger>[0] = []
+    for (const { conference, ready } of readyItems) {
+      const row = await prisma.conferenceRecord.upsert({
+        where: { recordName: conference.name },
+        create: {
+          userId,
+          recordName: conference.name,
+          spaceId: conference.spaceId,
+          startTime: conference.startTime
+            ? new Date(conference.startTime)
+            : null,
+          endTime: conference.endTime ? new Date(conference.endTime) : null,
+        },
+        update: {},
+        select: { id: true },
+      })
 
-    const batch = readyItems.map(({ conference, ready }, i) => ({
-      payload: {
-        userId,
-        conferenceRecordId: conferenceRows[i].id,
-        recordName: conference.name,
-        transcriptName: ready.transcriptName,
-        docsFileId: ready.docsFileId!,
-        startTime: conference.startTime,
-      },
-    }))
+      batch.push({
+        payload: {
+          userId,
+          conferenceRecordId: row.id,
+          recordName: conference.name,
+          transcriptName: ready.transcriptName,
+          docsFileId: ready.docsFileId!,
+          startTime: conference.startTime,
+        },
+      })
+    }
 
     await meetIngestTask.batchTrigger(batch)
 
