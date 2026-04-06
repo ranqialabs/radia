@@ -1,7 +1,7 @@
 import { logger, schemaTask } from "@trigger.dev/sdk"
 import { z } from "zod"
 import { getValidAccessToken } from "../lib/google-drive"
-import { buildFormattedTranscript } from "../lib/google-meet"
+import { getMeetClient, buildFormattedTranscript } from "../lib/google-meet"
 import { extractMemories } from "../lib/memory-extractor"
 import {
   buildIngestionMessages,
@@ -31,6 +31,7 @@ export const meetIngestTask = schemaTask({
     startTime,
   }) => {
     const accessToken = await getValidAccessToken(userId)
+    const meetClient = getMeetClient(accessToken)
 
     // Only look up the Drive memory link if not already linked from a prior run
     const conferenceRow = await prisma.conferenceRecord.findUnique({
@@ -44,7 +45,7 @@ export const meetIngestTask = schemaTask({
         : prisma.meetingMemory.findUnique({
             where: { fileId_userId: { fileId: docsFileId, userId } },
           }),
-      buildFormattedTranscript(accessToken, transcriptName),
+      buildFormattedTranscript(meetClient, transcriptName),
     ])
 
     if (existingMemory) {

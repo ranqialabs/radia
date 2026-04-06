@@ -2,6 +2,7 @@ import { logger, metadata, schemaTask } from "@trigger.dev/sdk"
 import { z } from "zod"
 import { getValidAccessToken } from "../lib/google-drive"
 import {
+  getMeetClient,
   listConferenceRecords,
   listTranscriptsWithDoc,
 } from "../lib/google-meet"
@@ -37,9 +38,10 @@ export const meetScanTask = schemaTask({
     logger.log("Starting Meet scan", { userId })
 
     const accessToken = await getValidAccessToken(userId)
+    const meetClient = getMeetClient(accessToken)
 
     const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()
-    const conferences = await listConferenceRecords(accessToken, {
+    const conferences = await listConferenceRecords(meetClient, {
       filter: `startTime > "${since}"`,
     })
 
@@ -78,7 +80,7 @@ export const meetScanTask = schemaTask({
       CONCURRENCY,
       async (conference) => {
         const transcripts = await listTranscriptsWithDoc(
-          accessToken,
+          meetClient,
           conference.name
         )
         const ready =

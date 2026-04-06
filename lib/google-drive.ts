@@ -1,4 +1,8 @@
-import { google, drive_v3, docs_v1 } from "googleapis"
+import { drive_v3 } from "@googleapis/drive"
+import { docs_v1 } from "@googleapis/docs"
+import { drive } from "@googleapis/drive"
+import { docs } from "@googleapis/docs"
+import { OAuth2Client } from "google-auth-library"
 import { prisma } from "./prisma"
 
 export async function getValidAccessToken(userId: string): Promise<string> {
@@ -23,7 +27,7 @@ export async function getValidAccessToken(userId: string): Promise<string> {
     )
   }
 
-  const auth = new google.auth.OAuth2(
+  const auth = new OAuth2Client(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET
   )
@@ -44,22 +48,22 @@ export async function getValidAccessToken(userId: string): Promise<string> {
   return credentials.access_token!
 }
 
-export function createGoogleAuth(accessToken: string) {
-  const auth = new google.auth.OAuth2()
+export function createGoogleAuth(accessToken: string): OAuth2Client {
+  const auth = new OAuth2Client()
   auth.setCredentials({ access_token: accessToken })
   return auth
 }
 
 export function getDriveClient(accessToken: string): drive_v3.Drive {
-  return google.drive({ version: "v3", auth: createGoogleAuth(accessToken) })
+  return drive({ version: "v3", auth: createGoogleAuth(accessToken) })
 }
 
 export function getDocsClient(accessToken: string): docs_v1.Docs {
-  return google.docs({ version: "v1", auth: createGoogleAuth(accessToken) })
+  return docs({ version: "v1", auth: createGoogleAuth(accessToken) })
 }
 
 export async function listDriveFiles(
-  drive: drive_v3.Drive,
+  driveClient: drive_v3.Drive,
   options?: { folderId?: string; pageSize?: number }
 ): Promise<drive_v3.Schema$File[]> {
   const { folderId, pageSize = 50 } = options ?? {}
@@ -72,7 +76,7 @@ export async function listDriveFiles(
     queryParts.push(`'${folderId}' in parents`)
   }
 
-  const res = await drive.files.list({
+  const res = await driveClient.files.list({
     q: queryParts.join(" and "),
     orderBy: "modifiedTime desc",
     pageSize,
@@ -83,10 +87,10 @@ export async function listDriveFiles(
 }
 
 export async function listDriveFolders(
-  drive: drive_v3.Drive,
+  driveClient: drive_v3.Drive,
   parentId = "root"
 ): Promise<drive_v3.Schema$File[]> {
-  const res = await drive.files.list({
+  const res = await driveClient.files.list({
     q: `mimeType='application/vnd.google-apps.folder' and trashed=false and '${parentId}' in parents`,
     orderBy: "name",
     pageSize: 100,
@@ -97,10 +101,10 @@ export async function listDriveFolders(
 }
 
 export async function exportDocAsText(
-  drive: drive_v3.Drive,
+  driveClient: drive_v3.Drive,
   fileId: string
 ): Promise<string> {
-  const res = await drive.files.export(
+  const res = await driveClient.files.export(
     { fileId, mimeType: "text/plain" },
     { responseType: "arraybuffer" }
   )
@@ -148,9 +152,9 @@ export async function extractAllTabsText(
   accessToken: string,
   documentId: string
 ): Promise<DocTab[]> {
-  const docs = getDocsClient(accessToken)
+  const docsClient = getDocsClient(accessToken)
 
-  const res = await docs.documents.get({
+  const res = await docsClient.documents.get({
     documentId,
     includeTabsContent: true,
   })

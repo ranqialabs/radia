@@ -1,9 +1,6 @@
-import { google } from "googleapis"
-import { createGoogleAuth } from "./google-drive"
-
-function getMeetClient(accessToken: string) {
-  return google.meet({ version: "v2", auth: createGoogleAuth(accessToken) })
-}
+import { meet_v2 } from "@googleapis/meet"
+import { meet } from "@googleapis/meet"
+import { OAuth2Client } from "google-auth-library"
 
 export type ConferenceRecord = {
   name: string
@@ -26,16 +23,21 @@ export type TranscriptEntry = {
   languageCode: string | null
 }
 
+export function getMeetClient(accessToken: string): meet_v2.Meet {
+  const auth = new OAuth2Client()
+  auth.setCredentials({ access_token: accessToken })
+  return meet({ version: "v2", auth })
+}
+
 export async function listConferenceRecords(
-  accessToken: string,
+  client: meet_v2.Meet,
   options?: { filter?: string }
 ): Promise<ConferenceRecord[]> {
-  const meet = getMeetClient(accessToken)
   const records: ConferenceRecord[] = []
   let pageToken: string | undefined
 
   do {
-    const res = await meet.conferenceRecords.list({
+    const res = await client.conferenceRecords.list({
       pageSize: 100,
       pageToken,
       filter: options?.filter,
@@ -57,12 +59,10 @@ export async function listConferenceRecords(
 }
 
 export async function listTranscriptsWithDoc(
-  accessToken: string,
+  client: meet_v2.Meet,
   conferenceRecordName: string
 ): Promise<TranscriptWithDoc[]> {
-  const meet = getMeetClient(accessToken)
-
-  const res = await meet.conferenceRecords.transcripts.list({
+  const res = await client.conferenceRecords.transcripts.list({
     parent: conferenceRecordName,
   })
 
@@ -74,14 +74,13 @@ export async function listTranscriptsWithDoc(
 }
 
 async function* iterTranscriptEntries(
-  accessToken: string,
+  client: meet_v2.Meet,
   transcriptName: string
 ): AsyncGenerator<TranscriptEntry> {
-  const meet = getMeetClient(accessToken)
   let pageToken: string | undefined
 
   do {
-    const res = await meet.conferenceRecords.transcripts.entries.list({
+    const res = await client.conferenceRecords.transcripts.entries.list({
       parent: transcriptName,
       pageSize: 100,
       pageToken,
@@ -102,13 +101,11 @@ async function* iterTranscriptEntries(
 }
 
 export async function resolveParticipant(
-  accessToken: string,
+  client: meet_v2.Meet,
   participantName: string
 ): Promise<string | null> {
-  const meet = getMeetClient(accessToken)
-
   try {
-    const res = await meet.conferenceRecords.participants.get({
+    const res = await client.conferenceRecords.participants.get({
       name: participantName,
     })
     return (
@@ -122,15 +119,15 @@ export async function resolveParticipant(
 }
 
 export async function buildFormattedTranscript(
-  accessToken: string,
+  client: meet_v2.Meet,
   transcriptName: string
 ): Promise<string> {
   const nameMap = new Map<string, string>()
   const lines: string[] = []
 
-  for await (const e of iterTranscriptEntries(accessToken, transcriptName)) {
+  for await (const e of iterTranscriptEntries(client, transcriptName)) {
     if (e.participant && !nameMap.has(e.participant)) {
-      const name = await resolveParticipant(accessToken, e.participant)
+      const name = await resolveParticipant(client, e.participant)
       nameMap.set(e.participant, name ?? "Unknown")
     }
 
