@@ -44,7 +44,7 @@ export async function getValidAccessToken(userId: string): Promise<string> {
   return credentials.access_token!
 }
 
-function createGoogleAuth(accessToken: string) {
+export function createGoogleAuth(accessToken: string) {
   const auth = new google.auth.OAuth2()
   auth.setCredentials({ access_token: accessToken })
   return auth

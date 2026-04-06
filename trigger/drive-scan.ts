@@ -7,6 +7,11 @@ import {
   listDriveFiles,
 } from "../lib/google-drive"
 import { extractMemories } from "../lib/memory-extractor"
+import {
+  buildIngestionMessages,
+  buildMeetingContext,
+  extractMem0Ids,
+} from "../lib/mem0-helpers"
 import { mem0 } from "../lib/mem0"
 import { prisma } from "../lib/prisma"
 
@@ -90,29 +95,14 @@ export const driveScanTask = schemaTask({
         continue
       }
 
-      // Build messages scoped to this meeting.
-      // Using run_id = fileId isolates each meeting as its own episode in mem0,
-      // enabling per-meeting filtering and preventing cross-meeting noise.
-      const meetingContext = `[Meeting: ${file.name}${extracted.participants.length ? ` | Participants: ${extracted.participants.join(", ")}` : ""}]`
+      const meetingContext = buildMeetingContext(
+        file.name,
+        extracted.participants
+      )
+      const messages = buildIngestionMessages(extracted, meetingContext)
 
-      const memoryMessages = extracted.memories.map((m) => ({
-        role: "user" as const,
-        content: `${meetingContext} ${m.content}`,
-      }))
-
-      // Entities are sent as a separate batch with their own context so mem0
-      // understands these are named entity definitions, not just facts.
-      const entityMessages = extracted.entities.map((e) => ({
-        role: "user" as const,
-        content: `${meetingContext} Entity: ${e.name} is a ${e.type}${e.description ? ` — ${e.description}` : ""}${e.aliases.length ? `. Also referred to as: ${e.aliases.join(", ")}` : ""}.`,
-      }))
-
-      const allMessages = [...entityMessages, ...memoryMessages]
-
-      const result = await mem0.add(allMessages, {
+      const result = await mem0.add(messages, {
         user_id: userId,
-        // run_id scopes this batch to the specific meeting file,
-        // enabling future per-meeting searches and deletions.
         run_id: file.id,
         metadata: {
           fileId: file.id,
@@ -130,11 +120,7 @@ export const driveScanTask = schemaTask({
         })
       }
 
-      const mem0Ids = Array.isArray(result)
-        ? result
-            .map((r: { id?: string }) => r.id)
-            .filter((id): id is string => id !== undefined)
-        : []
+      const mem0Ids = extractMem0Ids(result)
 
       await prisma.meetingMemory.update({
         where: { fileId_userId: { fileId: file.id, userId } },

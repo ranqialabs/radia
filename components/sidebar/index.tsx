@@ -3,7 +3,12 @@
 import { authClient } from "@/lib/auth-client"
 import { useIntegrations } from "@/providers/integrations"
 import { GOOGLE_SCOPES } from "@/lib/google-scopes"
-import { GoogleDocIcon, GoogleDriveIcon } from "@hugeicons/core-free-icons"
+import {
+  GoogleDocIcon,
+  GoogleDriveIcon,
+  VideoIcon,
+  CameraMicrophoneIcon,
+} from "@hugeicons/core-free-icons"
 import {
   Sidebar,
   SidebarContent,
@@ -25,7 +30,8 @@ type AppSidebarProps = {
 
 export function AppSidebar({ monitoredFolder }: AppSidebarProps) {
   const { data: session } = authClient.useSession()
-  const { driveConnected, docsConnected } = useIntegrations()
+  const { driveConnected, docsConnected, meetConnected, driveMeetConnected } =
+    useIntegrations()
 
   async function requestGoogleScope(scopes: string[]) {
     const { data } = await authClient.linkSocial({
@@ -75,6 +81,22 @@ export function AppSidebar({ monitoredFolder }: AppSidebarProps) {
             connected={docsConnected}
             onConnectAction={() =>
               requestGoogleScope([GOOGLE_SCOPES.DOCS_READONLY])
+            }
+          />
+          <IntegrationItem
+            icon={VideoIcon}
+            label="Google Meet"
+            connected={meetConnected}
+            onConnectAction={() =>
+              requestGoogleScope([GOOGLE_SCOPES.MEET_READONLY])
+            }
+          />
+          <IntegrationItem
+            icon={CameraMicrophoneIcon}
+            label="Meet Transcripts"
+            connected={driveMeetConnected}
+            onConnectAction={() =>
+              requestGoogleScope([GOOGLE_SCOPES.DRIVE_MEET_READONLY])
             }
           />
           <FolderMonitorItem monitoredFolder={monitoredFolder} />

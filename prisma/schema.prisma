@@ -13,13 +13,13 @@ datasource db {
 }
 
 model User {
-  id              String          @id
+  id              String           @id
   name            String
   email           String
-  emailVerified   Boolean         @default(false)
+  emailVerified   Boolean          @default(false)
   image           String?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
   sessions        Session[]
   accounts        Account[]
   meetingMemories MeetingMemory[]
@@ -66,16 +66,34 @@ model Account {
 }
 
 model MeetingMemory {
-  id          String   @id @default(cuid())
-  fileId      String
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  mem0Ids     String[]
-  title       String?
-  processedAt DateTime @default(now())
+  id               String            @id @default(cuid())
+  fileId           String
+  userId           String
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mem0Ids          String[]
+  title            String?
+  processedAt      DateTime          @default(now())
+  conferenceRecord ConferenceRecord?
 
   @@unique([fileId, userId])
   @@map("meeting_memory")
+}
+
+model ConferenceRecord {
+  id                 String         @id @default(cuid())
+  userId             String
+  recordName         String         @unique
+  spaceId            String?
+  startTime          DateTime?
+  endTime            DateTime?
+  meetingMemoryId    String?        @unique
+  meetingMemory      MeetingMemory? @relation(fields: [meetingMemoryId], references: [id])
+  transcriptIngested Boolean        @default(false)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  @@index([userId])
+  @@map("conference_record")
 }
 
 model MonitoredFolder {

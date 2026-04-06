@@ -18,7 +18,12 @@ export const auth = betterAuth({
       clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
       accessType: "offline",
       prompt: "select_account consent",
-      scopes: [GOOGLE_SCOPES.DRIVE_READONLY, GOOGLE_SCOPES.DOCS_READONLY],
+      scopes: [
+        GOOGLE_SCOPES.DRIVE_READONLY,
+        GOOGLE_SCOPES.DOCS_READONLY,
+        GOOGLE_SCOPES.MEET_READONLY,
+        GOOGLE_SCOPES.DRIVE_MEET_READONLY,
+      ],
     },
   },
   plugins: [nextCookies()],

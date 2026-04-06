@@ -28,6 +28,8 @@ async function getGoogleScopes(userId: string) {
   return {
     driveConnected,
     docsConnected: scope.includes("documents"),
+    meetConnected: scope.includes("meetings.space"),
+    driveMeetConnected: scope.includes("drive.meet"),
     monitoredFolder: monitoredFolder
       ? { id: monitoredFolder.folderId, name: monitoredFolder.folderName }
       : null,
@@ -40,12 +42,31 @@ export default async function AppLayout({
   children: React.ReactNode
 }) {
   const session = await getServerSession()
-  const { driveConnected, docsConnected, monitoredFolder } = session
+  const {
+    driveConnected,
+    docsConnected,
+    meetConnected,
+    driveMeetConnected,
+    monitoredFolder,
+  } = session
     ? await getGoogleScopes(session.user.id)
-    : { driveConnected: false, docsConnected: false, monitoredFolder: null }
+    : {
+        driveConnected: false,
+        docsConnected: false,
+        meetConnected: false,
+        driveMeetConnected: false,
+        monitoredFolder: null,
+      }
 
   return (
-    <IntegrationsProvider value={{ driveConnected, docsConnected }}>
+    <IntegrationsProvider
+      value={{
+        driveConnected,
+        docsConnected,
+        meetConnected,
+        driveMeetConnected,
+      }}
+    >
       <SidebarProvider>
         <Suspense>
           <AppSidebar monitoredFolder={monitoredFolder as DriveFolder | null} />

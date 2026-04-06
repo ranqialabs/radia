@@ -1,5 +1,5 @@
 import { schedules } from "@trigger.dev/sdk"
-import { driveScanTask } from "./drive-scan"
+import { meetScanTask } from "./meet-scan"
 
 export const folderMonitorTask = schedules.task({
   id: "folder-monitor",
@@ -7,6 +7,6 @@ export const folderMonitorTask = schedules.task({
     const { externalId: userId } = payload
     if (!userId) return
 
-    await driveScanTask.trigger({ userId })
+    await meetScanTask.trigger({ userId })
   },
 })
