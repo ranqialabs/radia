@@ -16,8 +16,14 @@ import {
 } from "@/components/ui/sidebar"
 import { IntegrationItem } from "./integration-item"
 import { AccountItem } from "./account-item"
+import { FolderMonitorItem } from "./folder-monitor-item"
+import type { DriveFolder } from "@/actions/drive"
 
-export function AppSidebar() {
+type AppSidebarProps = {
+  monitoredFolder: DriveFolder | null
+}
+
+export function AppSidebar({ monitoredFolder }: AppSidebarProps) {
   const { data: session } = authClient.useSession()
   const { driveConnected, docsConnected } = useIntegrations()
 
@@ -30,7 +36,8 @@ export function AppSidebar() {
     })
     if (data?.url) {
       const url = new URL(data.url)
-      if (session?.user.email) url.searchParams.set("login_hint", session.user.email)
+      if (session?.user.email)
+        url.searchParams.set("login_hint", session.user.email)
       window.location.href = url.toString()
     }
   }
@@ -58,14 +65,19 @@ export function AppSidebar() {
             icon={GoogleDriveIcon}
             label="Google Drive"
             connected={driveConnected}
-            onConnectAction={() => requestGoogleScope([GOOGLE_SCOPES.DRIVE_READONLY])}
+            onConnectAction={() =>
+              requestGoogleScope([GOOGLE_SCOPES.DRIVE_READONLY])
+            }
           />
           <IntegrationItem
             icon={GoogleDocIcon}
             label="Google Docs"
             connected={docsConnected}
-            onConnectAction={() => requestGoogleScope([GOOGLE_SCOPES.DOCS_READONLY])}
+            onConnectAction={() =>
+              requestGoogleScope([GOOGLE_SCOPES.DOCS_READONLY])
+            }
           />
+          <FolderMonitorItem monitoredFolder={monitoredFolder} />
           <AccountItem
             name={session?.user.name}
             email={session?.user.email}
